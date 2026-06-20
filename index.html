@@ -176,11 +176,11 @@
 
     function drawNaturalText(text, x, y, ctx, color) {
         const scale = Math.max(0.1, baseLayer.width / 800);
-        const fontSize = Math.round(80 * scale);
+        const fontSize = Math.round(40 * scale);
         ctx.font = `900 ${fontSize}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'white'; const offset = 5 * scale;
-        for (let dx = -offset; dx <= offset; dx += 2.5 * scale) {
-            for (let dy = -offset; dy <= offset; dy += 2.5 * scale) {
+        ctx.fillStyle = 'white'; const offset = 3 * scale;
+        for (let dx = -offset; dx <= offset; dx += 1.5 * scale) {
+            for (let dy = -offset; dy <= offset; dy += 1.5 * scale) {
                 ctx.fillText(text, x + dx, y + dy);
             }
         }
