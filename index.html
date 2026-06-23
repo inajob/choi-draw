@@ -69,7 +69,10 @@
     <div class="content" style="padding: 10px;">
         <div class="panel" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
             <span>Select Image:</span>
-            <input type="file" id="fileInput" accept="image/*" style="font-size: 11px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <input type="file" id="fileInput" accept="image/*" style="font-size: 11px;">
+                <button id="btnPaste" onclick="pasteFromClipboard()" title="Paste image from clipboard (Ctrl+V)">📋 Paste</button>
+            </div>
         </div>
 
         <div class="panel" style="margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
@@ -142,28 +145,83 @@
         if (el) el.classList.add('selected');
     }
     
-    // 画像ファイルを読み込んだ際の処理を修正
+    // 画像をキャンバスに読み込む共通関数
+    function loadImageToCanvas(img) {
+        baseLayer.width = img.width;
+        baseLayer.height = img.height;
+        frontLayer.width = img.width;
+        frontLayer.height = img.height;
+        document.getElementById('canvas-wrapper').style.minHeight = (img.height * (frontLayer.clientWidth / img.width)) + 'px';
+        baseLayer.getContext('2d').drawImage(img, 0, 0);
+        history = [];
+    }
+
+    // Blobまたはファイルから画像を読み込む
+    function loadImageFromBlob(blob) {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => { loadImageToCanvas(img); URL.revokeObjectURL(url); };
+        img.onerror = () => { alert('Failed to load image.'); URL.revokeObjectURL(url); };
+        img.src = url;
+    }
+
+    // 画像ファイルを読み込んだ際の処理
     document.getElementById('fileInput').addEventListener('change', e => {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = ev => {
-            const img = new Image();
-            img.onload = () => {
-                // キャンバスの物理サイズを画像の解像度に合わせる（これが重要）
-                baseLayer.width = img.width;
-                baseLayer.height = img.height;
-                frontLayer.width = img.width;
-                frontLayer.height = img.height;
-                
-                // キャンバスラッパーの高さを動的に確保
-                document.getElementById('canvas-wrapper').style.minHeight = (img.height * (frontLayer.clientWidth / img.width)) + 'px';
-                
-                baseLayer.getContext('2d').drawImage(img, 0, 0);
-            };
-            img.src = ev.target.result;
-        };
-        reader.readAsDataURL(file);
+        loadImageFromBlob(file);
+    });
+
+    // クリップボードから画像を貼り付ける（ボタン押下時）
+    async function pasteFromClipboard() {
+        if (!navigator.clipboard || !navigator.clipboard.read) {
+            alert('クリップボードAPIが使用できません。\nCtrl+V (PC) またはページへの長押しメニューから貼り付けてください。');
+            return;
+        }
+        try {
+            const items = await navigator.clipboard.read();
+            let found = false;
+            for (const item of items) {
+                const imageType = item.types.find(t => t.startsWith('image/'));
+                if (imageType) {
+                    const blob = await item.getType(imageType);
+                    loadImageFromBlob(blob);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                alert('クリップボードに画像が見つかりません。\nスクリーンショットや画像をコピーしてから試してください。');
+            }
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                alert('クリップボードへのアクセスが拒否されました。\nブラウザの設定で許可するか、Ctrl+V で貼り付けてください。');
+            } else {
+                alert('クリップボードの読み込みに失敗しました: ' + err.message);
+            }
+        }
+    }
+
+    // Ctrl+V / ブラウザのペーストイベントで貼り付け
+    document.addEventListener('paste', e => {
+        const items = (e.clipboardData || e.originalEvent && e.originalEvent.clipboardData || window.clipboardData);
+        if (!items) return;
+        const files = items.files || [];
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].type.startsWith('image/')) {
+                loadImageFromBlob(files[i]);
+                return;
+            }
+        }
+        // DataTransferItemList からも試みる
+        if (items.items) {
+            for (let i = 0; i < items.items.length; i++) {
+                if (items.items[i].type.startsWith('image/')) {
+                    const blob = items.items[i].getAsFile();
+                    if (blob) { loadImageFromBlob(blob); return; }
+                }
+            }
+        }
     });
 
     // 以下、描画・制御ロジック
